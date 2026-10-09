@@ -125,6 +125,7 @@ Project skills live in `.claude/skills/` (managed by `npx skills`, pinned in
 | Area | Skills |
 | --- | --- |
 | Flame | `flutter-flame-games` |
+| Game design | `fps-shooter` (shooting model, TTK, hit feedback), `game-design-craft-critique` (systems-vs-experience review of a game) |
 | Flutter | `flutter-apply-architecture-best-practices`, `flutter-build-responsive-layout`, `flutter-fix-layout-issues`, `flutter-add-widget-test`, `flutter-add-integration-test` |
 | Dart | `dart-add-unit-test`, `dart-run-static-analysis`, `dart-use-pattern-matching`, `dart-resolve-package-conflicts` |
 | Supabase | `supabase`, `supabase-postgres-best-practices` |

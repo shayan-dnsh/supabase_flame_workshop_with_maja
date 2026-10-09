@@ -67,6 +67,18 @@
       "skillPath": "flutter-flame-games/SKILL.md",
       "computedHash": "95afe4a5e71481e236ec5820b197f759ec98a26fbf78c0ae7aa2940b9fe02aac"
     },
+    "fps-shooter": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/genres/fps-shooter/SKILL.md",
+      "computedHash": "38829c3a6e65252aa7f833252193aa97e865b6c0362a7610b18da8027e8b7312"
+    },
+    "game-design-craft-critique": {
+      "source": "stanestane/game-design-skills-bundle",
+      "sourceType": "github",
+      "skillPath": "game-design-craft-critique/SKILL.md",
+      "computedHash": "73c131d5ad3784a32cdda4259bc251cf616e7b4e2fbef89301549e486625d3de"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
