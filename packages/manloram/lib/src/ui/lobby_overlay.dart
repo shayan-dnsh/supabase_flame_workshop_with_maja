@@ -131,22 +131,24 @@ class _LobbyOverlayState extends State<LobbyOverlay> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _name,
-                      // The lobby is scaled down on a phone, so the name is
-                      // typed in a dialog at the real screen size.
-                      readOnly: widget.phone,
-                      onTap: widget.phone ? _editNameInDialog : null,
-                      maxLength: 24,
-                      decoration: const InputDecoration(
-                        labelText: 'Your name',
-                        counterText: '',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (value) =>
-                          _save(profile.copyWith(username: value.trim())),
-                    ),
+                    // The lobby is scaled down on a phone, and a phone
+                    // browser shrinks the page for its keyboard, even for a
+                    // read-only field. So there is no text field here on a
+                    // phone: a tap types the name in a dialog instead.
+                    child: widget.phone
+                        ? _NameButton(name: _name, onTap: _editNameInDialog)
+                        : TextField(
+                            controller: _name,
+                            maxLength: 24,
+                            decoration: const InputDecoration(
+                              labelText: 'Your name',
+                              counterText: '',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (value) =>
+                                _save(profile.copyWith(username: value.trim())),
+                          ),
                   ),
                   const SizedBox(width: 10),
                   DropdownButton<String>(
@@ -694,6 +696,35 @@ class _LeaderboardRowView extends StatelessWidget {
   }
 }
 
+/// The player's name, looking like the text field it stands in for.
+class _NameButton extends StatelessWidget {
+  const _NameButton({required this.name, required this.onTap});
+
+  final TextEditingController name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Your name',
+          isDense: true,
+          border: OutlineInputBorder(),
+          suffixIcon: Icon(Icons.edit_rounded, size: 16),
+        ),
+        child: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: name,
+          builder: (context, value, _) =>
+              Text(value.text, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+    );
+  }
+}
+
 /// Types the player's name at the real screen size, so it stays readable
 /// above a phone keyboard. Pops with the new name, or null on cancel.
 class _NameDialog extends StatefulWidget {
@@ -716,32 +747,31 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Scrollable: sideways, the keyboard leaves only a strip of screen.
+    // Compact and scrollable: sideways, the keyboard leaves only a strip of
+    // screen. The keyboard's done key or the tick saves; a tap outside
+    // cancels.
     return AlertDialog(
       scrollable: true,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      contentPadding: const EdgeInsets.all(12),
       content: TextField(
         controller: _field,
         autofocus: true,
         maxLength: 24,
         textInputAction: TextInputAction.done,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'Your name',
           counterText: '',
           isDense: true,
-          border: OutlineInputBorder(),
+          border: const OutlineInputBorder(),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.check_rounded),
+            tooltip: 'Save',
+            onPressed: () => Navigator.pop(context, _field.text),
+          ),
         ),
         onSubmitted: (value) => Navigator.pop(context, value),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _field.text),
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 }
