@@ -187,6 +187,9 @@ class _ManLoramAppState extends State<ManLoramApp> {
         theme: Palette.theme,
         home: Scaffold(
           backgroundColor: Palette.night,
+          // A phone keyboard must not squeeze the arena: the scaled lobby
+          // would shrink to a sliver. Text is typed in dialogs instead.
+          resizeToAvoidBottomInset: false,
           body: LayoutBuilder(
             builder: (context, constraints) => Stack(
               children: [

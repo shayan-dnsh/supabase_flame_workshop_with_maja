@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import '../../game_config.dart';
+import '../body_geometry.dart';
 import '../lor_painter.dart';
 import '../outfit.dart';
 import '../weapon.dart';
@@ -42,7 +43,9 @@ abstract class LorCharacter extends PositionComponent {
   double _walkPhase = 0;
   double _blinkTime = 0;
 
-  int get facing => cos(aim) >= 0 ? 1 : -1;
+  /// Which way the body faces, 1 right or -1 left. It follows walking,
+  /// not the aim; see [BodyGeometry.facingFor].
+  int facing = 1;
 
   /// Seconds of spawn protection left; the character blinks meanwhile.
   double get protectionLeft => 0;
@@ -98,6 +101,7 @@ abstract class LorCharacter extends PositionComponent {
       outfit: outfit,
       color: color,
       aim: aim,
+      facing: facing.toDouble(),
       charging: charging,
       weaponId: weaponId,
       walkPhase: _walkPhase,

@@ -5,11 +5,17 @@ import 'package:flame/components.dart';
 import '../game_config.dart';
 
 class ThrowPhysics {
+  /// How full the charge is after holding the throw for [heldSeconds], from
+  /// 0 to 1. At 1 holding longer adds nothing, so the game shows it.
+  static double chargeFor(double heldSeconds) {
+    return (heldSeconds / GameConfig.chargeSeconds).clamp(0.0, 1.0);
+  }
+
   /// Launch power after holding the throw for [heldSeconds]: a tap still
   /// throws, a full charge takes [GameConfig.chargeSeconds].
   static double powerFor(double heldSeconds) {
-    final progress = (heldSeconds / GameConfig.chargeSeconds).clamp(0.0, 1.0);
-    return GameConfig.minPower + (1 - GameConfig.minPower) * progress;
+    return GameConfig.minPower +
+        (1 - GameConfig.minPower) * chargeFor(heldSeconds);
   }
 
   static Vector2 launchVelocity(double aim, double power, double speed) {

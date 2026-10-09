@@ -133,6 +133,10 @@ class _LobbyOverlayState extends State<LobbyOverlay> {
                   Expanded(
                     child: TextField(
                       controller: _name,
+                      // The lobby is scaled down on a phone, so the name is
+                      // typed in a dialog at the real screen size.
+                      readOnly: widget.phone,
+                      onTap: widget.phone ? _editNameInDialog : null,
                       maxLength: 24,
                       decoration: const InputDecoration(
                         labelText: 'Your name',
@@ -227,6 +231,20 @@ class _LobbyOverlayState extends State<LobbyOverlay> {
         _Controls(phoneFirst: widget.phone),
       ],
     );
+  }
+
+  /// Name editing on a phone, readable above the keyboard.
+  Future<void> _editNameInDialog() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => _NameDialog(initial: _name.text),
+    );
+    final trimmed = name?.trim();
+    if (trimmed == null || trimmed.isEmpty || !mounted) {
+      return;
+    }
+    _name.text = trimmed;
+    await _save(game.profile.value.copyWith(username: trimmed));
   }
 
   Future<void> _confirmRemove(LobbyPresence member) async {
@@ -676,6 +694,58 @@ class _LeaderboardRowView extends StatelessWidget {
   }
 }
 
+/// Types the player's name at the real screen size, so it stays readable
+/// above a phone keyboard. Pops with the new name, or null on cancel.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final _field = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Scrollable: sideways, the keyboard leaves only a strip of screen.
+    return AlertDialog(
+      scrollable: true,
+      content: TextField(
+        controller: _field,
+        autofocus: true,
+        maxLength: 24,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          labelText: 'Your name',
+          counterText: '',
+          isDense: true,
+          border: OutlineInputBorder(),
+        ),
+        onSubmitted: (value) => Navigator.pop(context, value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _field.text),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 /// How to play, for a laptop or a phone; opens on the one in use.
 class _Controls extends StatefulWidget {
   const _Controls({required this.phoneFirst});
@@ -704,7 +774,7 @@ class _ControlsState extends State<_Controls> {
         'drop off a ledge.',
     'Right thumb anywhere on the right: push the way to throw, hold for '
         'power, lift to throw. Slide back to the middle to cancel.',
-    'Stone/Ajor swaps weapons; Chub swings the stick up close.',
+    'Stone/Ajor swaps weapons; Chub swings at whoever is closest.',
   ];
 
   @override

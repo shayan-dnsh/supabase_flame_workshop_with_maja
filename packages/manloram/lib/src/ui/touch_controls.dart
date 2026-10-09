@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../game/game_phase.dart';
 import '../game/manloram_game.dart';
+import '../game/throw_physics.dart';
 import '../game/touch_sticks.dart';
 import '../game/weapon.dart';
 import '../game_config.dart';
@@ -31,6 +32,8 @@ class _TouchControlsState extends State<TouchControls> {
   /// Share of the screen height above the sticks, where the health bar,
   /// standings and the Leave practice button are.
   static const _hudBand = 0.38;
+
+  static const _radius = GameConfig.stickRadius;
 
   /// Whether the aiming thumb is outside the dead zone, so lifting throws.
   bool _aiming = false;
@@ -61,9 +64,7 @@ class _TouchControlsState extends State<TouchControls> {
       return const (charge: 0, cooldown: 0);
     }
     return (
-      charge: me.charging
-          ? (me.heldSeconds / GameConfig.chargeSeconds).clamp(0.0, 1.0)
-          : 0.0,
+      charge: me.charging ? ThrowPhysics.chargeFor(me.heldSeconds) : 0.0,
       cooldown: me.cooldownLeft > 0
           ? (me.cooldownLeft / me.cooldownTotal).clamp(0.0, 1.0)
           : 0.0,
@@ -83,6 +84,22 @@ class _TouchControlsState extends State<TouchControls> {
             builder: (context, constraints) {
               final top = constraints.maxHeight * _hudBand;
               final half = constraints.maxWidth / 2;
+              // Where the aiming stick rests: the buttons sit in an arc just
+              // above it, a short reach for the right thumb.
+              final aimHome = _Stick.homeIn(
+                Size(constraints.maxWidth, constraints.maxHeight),
+                onRight: true,
+              );
+              Widget button(Offset offset, Widget child) {
+                const size = _TapButton.size;
+                final center = aimHome + offset;
+                return Positioned(
+                  left: center.dx - size / 2,
+                  top: max(top, center.dy - size / 2),
+                  child: child,
+                );
+              }
+
               return Stack(
                 children: [
                   Positioned(
@@ -112,27 +129,24 @@ class _TouchControlsState extends State<TouchControls> {
                     ),
                   ),
                   // Above the aiming half, so a press never aims or throws.
-                  Positioned(
-                    right: 12,
-                    top: top,
-                    child: Row(
-                      children: [
-                        ValueListenableBuilder<Weapon>(
-                          valueListenable: game.weaponNotifier,
-                          builder: (context, weapon, _) => _TapButton(
-                            label: weapon.isAjor ? 'Ajor' : 'Stone',
-                            icon: Icons.swap_horiz_rounded,
-                            color: weapon.isAjor ? Palette.brick : null,
-                            onTap: () => game.me?.switchWeapon(),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        _TapButton(
-                          label: 'Chub',
-                          icon: Icons.sports_hockey_rounded,
-                          onTap: () => game.me?.swing(),
-                        ),
-                      ],
+                  button(
+                    const Offset(-_radius * 0.3, -_radius - 52),
+                    _TapButton(
+                      label: 'Chub',
+                      icon: Icons.sports_hockey_rounded,
+                      onTap: game.touchSwing,
+                    ),
+                  ),
+                  button(
+                    const Offset(-_radius - 62, -_radius - 18),
+                    ValueListenableBuilder<Weapon>(
+                      valueListenable: game.weaponNotifier,
+                      builder: (context, weapon, _) => _TapButton(
+                        label: weapon.isAjor ? 'Ajor' : 'Stone',
+                        icon: Icons.swap_horiz_rounded,
+                        color: weapon.isAjor ? Palette.brick : null,
+                        onTap: () => game.me?.switchWeapon(),
+                      ),
                     ),
                   ),
                 ],
@@ -165,6 +179,15 @@ class _Stick extends StatefulWidget {
   final void Function(double x, double y) onMoved;
   final void Function({required bool cancelled}) onReleased;
   final StickGauge Function()? gauge;
+
+  /// Where a stick rests, in the bottom corner of an area of [size].
+  static Offset homeIn(Size size, {required bool onRight}) {
+    const radius = GameConfig.stickRadius;
+    return Offset(
+      onRight ? size.width - radius - 28 : radius + 28,
+      size.height - radius - 22,
+    );
+  }
 
   @override
   State<_Stick> createState() => _StickState();
@@ -242,11 +265,9 @@ class _StickState extends State<_Stick> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final home = Offset(
-          widget.homeOnRight
-              ? constraints.maxWidth - _radius - 28
-              : _radius + 28,
-          constraints.maxHeight - _radius - 22,
+        final home = _Stick.homeIn(
+          constraints.biggest,
+          onRight: widget.homeOnRight,
         );
         final base = _base;
         return Listener(

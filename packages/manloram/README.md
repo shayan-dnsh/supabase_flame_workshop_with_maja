@@ -44,11 +44,11 @@ Acceptance criteria:
 | Maps | Falak-ol-Aflak Castle (classic ledges), Khorramabad Bazaar (a tower to lob over), Bisheh Waterfall (cliffs; water slows throws), Gahar Lake (wind bends throws) |
 | Rounds | A knockout ends the round; everyone returns to full health at their spawn after 2.5 s |
 | Levels | The level rises with every round and every 30 s (`--dart-define=LEVEL_SECONDS=8` to test faster), up to 6. Level 1 is calm; 2: villagers on the left throw stones; 3: the right side joins, with Ajor; 4: wind gusts bend every throw; 5: storm gusts can blow a throw back; then the crowd speeds up. Crowd hits only hurt: no points |
-| Move | `A` `D` or arrow keys, jump with `W`, `Space` or arrow up |
+| Move | `A` `D` or arrow keys, jump with `W`, `Space` or arrow up, drop off a ledge with `S` or arrow down. A jump pressed just before landing, or just after walking off a ledge, still counts |
 | Aim | Mouse; a short dotted arc shows the start of the throw |
-| Throw | Hold the left mouse button to charge, release to throw |
+| Throw | Hold the left mouse button to charge, release to throw. A ring at the hand fills with the charge and pulses when full. Held during a cooldown, the throw starts charging as soon as it can |
 | Weapon | `1` stone, `2` Ajor, `Q` to switch; up close, `F` or right-click swings the chub (the Lor fighting stick) |
-| Phone | Two floating sticks. Left thumb: slide to walk, push up to jump, down to drop off a ledge. Right thumb: push the way to throw, hold for power, lift to throw (slide back to the middle to cancel). Buttons swap Stone/Ajor and swing the chub. Turn the phone sideways; the first tap goes fullscreen where the browser allows it (on iPhone, use Add to Home Screen) |
+| Phone | Two floating sticks. Left thumb: slide to walk, push up to jump, down to drop off a ledge. Right thumb: push the way to throw, hold for power, lift to throw (slide back to the middle to cancel). Buttons above the right stick swap Stone/Ajor and swing the chub, which aims itself at the head of the nearest player in reach. Turn the phone sideways; the first tap goes fullscreen where the browser allows it (on iPhone, use Add to Home Screen) |
 | Health | 100; knocked out at 0; 1.5 s of protection at every spawn |
 | Hits | Blood splashes and drips; the hit player limps (a stone to the body a little, an Ajor to the head badly, up to 2.2 s) and sees stars. Low health slows a little too |
 | Room host | The player in the room longest. Gets a remove button next to everyone else in the lobby; removed players are ignored by everyone, and only a fresh tab gets back in |

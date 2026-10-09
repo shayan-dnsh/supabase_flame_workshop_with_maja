@@ -8,6 +8,7 @@ import 'package:manloram/src/db/supabase_schema.g.dart';
 import 'package:manloram/src/game/arena_map.dart';
 import 'package:manloram/src/game/body_geometry.dart';
 import 'package:manloram/src/game/crowd_difficulty.dart';
+import 'package:manloram/src/game/jump_window.dart';
 import 'package:manloram/src/game/wind_gusts.dart';
 import 'package:manloram/src/game/outfit.dart';
 import 'package:manloram/src/game/scoreboard.dart';
@@ -17,6 +18,7 @@ import 'package:manloram/src/game/weapon.dart';
 import 'package:manloram/src/game_config.dart';
 import 'package:manloram/src/net/payloads/lobby_presence.dart';
 import 'package:manloram/src/net/payloads/match_snapshot_payload.dart';
+import 'package:manloram/src/net/payloads/player_state_payload.dart';
 
 void main() {
   group('Touch sticks', () {
@@ -61,6 +63,13 @@ void main() {
         ThrowPhysics.powerFor(GameConfig.chargeSeconds / 2),
         closeTo((GameConfig.minPower + 1) / 2, 1e-9),
       );
+    });
+
+    test('the charge fills over the charge time and then stops', () {
+      expect(ThrowPhysics.chargeFor(0), 0);
+      expect(ThrowPhysics.chargeFor(GameConfig.chargeSeconds / 2), 0.5);
+      expect(ThrowPhysics.chargeFor(GameConfig.chargeSeconds), 1);
+      expect(ThrowPhysics.chargeFor(10), 1);
     });
 
     test('launch speed scales with power and follows the aim', () {
@@ -570,11 +579,177 @@ void main() {
       );
     });
 
+    test('a self-aimed swing goes for the head of the nearest in reach', () {
+      final near = attacker + Vector2(30, 0);
+      final far = attacker - Vector2(50, 0);
+      final aim = BodyGeometry.swingAimAt(attacker, [far, near]);
+      expect(aim, isNotNull);
+      expect(
+        BodyGeometry.swingHit(
+          attackerFeet: attacker,
+          aim: aim!,
+          victimFeet: near,
+        ),
+        BodyPart.head,
+      );
+    });
+
+    test('a self-aimed swing turns round for someone behind', () {
+      final behind = attacker - Vector2(40, 0);
+      final aim = BodyGeometry.swingAimAt(attacker, [behind]);
+      expect(aim, isNotNull);
+      expect(cos(aim!), lessThan(0));
+      expect(
+        BodyGeometry.swingHit(
+          attackerFeet: attacker,
+          aim: aim,
+          victimFeet: behind,
+        ),
+        BodyPart.head,
+      );
+    });
+
+    test('a self-aimed swing has nobody to aim at out of reach', () {
+      expect(
+        BodyGeometry.swingAimAt(attacker, [attacker + Vector2(200, 0)]),
+        isNull,
+      );
+      expect(BodyGeometry.swingAimAt(attacker, const []), isNull);
+    });
+
     test('the catalog knows the chub and its slowdown', () {
       final chub = WeaponCatalog().byId(Weapon.chubId);
       expect(chub.isChub, isTrue);
       expect(chub.pointsFor(BodyPart.head), 50);
       expect(chub.slowFor(BodyPart.head).speed, lessThan(1));
+    });
+  });
+
+  group('JumpWindow', () {
+    const frame = 1 / 60;
+
+    test('jumps at once from the ground, and only once', () {
+      final jumps = JumpWindow()..press();
+      expect(jumps.update(frame, onGround: true, held: false), isTrue);
+      expect(jumps.update(frame, onGround: false, held: false), isFalse);
+    });
+
+    test('a press just before landing jumps on landing', () {
+      final jumps = JumpWindow()..press();
+      expect(jumps.update(frame, onGround: false, held: false), isFalse);
+      expect(jumps.update(frame * 3, onGround: false, held: false), isFalse);
+      expect(jumps.update(frame, onGround: true, held: false), isTrue);
+    });
+
+    test('a press long before landing is forgotten', () {
+      final jumps = JumpWindow()..press();
+      jumps.update(
+        GameConfig.jumpBufferSeconds + frame,
+        onGround: false,
+        held: false,
+      );
+      expect(jumps.update(frame, onGround: true, held: false), isFalse);
+    });
+
+    test('just after walking off a ledge it still jumps', () {
+      final jumps = JumpWindow();
+      expect(jumps.update(frame, onGround: true, held: false), isFalse);
+      jumps.press();
+      expect(jumps.update(frame * 3, onGround: false, held: false), isTrue);
+    });
+
+    test('well after walking off a ledge it does not', () {
+      final jumps = JumpWindow();
+      jumps.update(frame, onGround: true, held: false);
+      jumps.update(
+        GameConfig.coyoteSeconds + frame,
+        onGround: false,
+        held: false,
+      );
+      jumps.press();
+      expect(jumps.update(frame, onGround: false, held: false), isFalse);
+    });
+
+    test('a held jump hops again on every landing', () {
+      final jumps = JumpWindow();
+      expect(jumps.update(frame, onGround: true, held: true), isTrue);
+      expect(jumps.update(frame, onGround: false, held: true), isFalse);
+      expect(jumps.update(frame, onGround: true, held: true), isTrue);
+    });
+
+    test('a drop through a ledge forgets the ground it left', () {
+      final jumps = JumpWindow();
+      jumps
+        ..update(frame, onGround: true, held: false)
+        ..cancel()
+        ..press();
+      expect(jumps.update(frame, onGround: false, held: false), isFalse);
+    });
+  });
+
+  group('facing', () {
+    test('a player faces the way they walk, not the aim', () {
+      expect(
+        BodyGeometry.facingFor(
+          current: 1,
+          walking: -1,
+          attacking: false,
+          aim: 0,
+        ),
+        -1,
+      );
+      expect(
+        BodyGeometry.facingFor(
+          current: -1,
+          walking: 1,
+          attacking: false,
+          aim: pi,
+        ),
+        1,
+      );
+    });
+
+    test('standing still keeps the last facing', () {
+      expect(
+        BodyGeometry.facingFor(
+          current: -1,
+          walking: 0,
+          attacking: false,
+          aim: 0,
+        ),
+        -1,
+      );
+    });
+
+    test('winding up a throw or a swing turns to the aim', () {
+      expect(
+        BodyGeometry.facingFor(
+          current: 1,
+          walking: 1,
+          attacking: true,
+          aim: pi,
+        ),
+        -1,
+      );
+    });
+
+    test('the facing travels with the player state', () {
+      const state = PlayerStatePayload(
+        id: 'a',
+        x: 1,
+        y: 2,
+        vx: 0,
+        vy: 0,
+        aim: 0,
+        facing: -1,
+        hp: 100,
+        knockedOut: false,
+        charging: false,
+        weaponId: 'stone',
+      );
+      expect(PlayerStatePayload.fromJson(state.toJson()).facing, -1);
+      final older = state.toJson()..remove('f');
+      expect(PlayerStatePayload.fromJson(older).facing, isNull);
     });
   });
 }

@@ -10,6 +10,7 @@ import '../arena_map.dart';
 import '../../db/supabase_schema.g.dart';
 import '../body_geometry.dart';
 import '../game_phase.dart';
+import '../jump_window.dart';
 import '../manloram_game.dart';
 import '../throw_physics.dart';
 import '../touch_sticks.dart';
@@ -31,7 +32,7 @@ class LocalLor extends LorCharacter
 
   /// Where the movement stick on a phone is pushed.
   MoveStick _stick = MoveStick.idle;
-  bool _jumpQueued = false;
+  final _jumps = JumpWindow();
   bool _onGround = true;
   double _dropTime = 0;
 
@@ -49,6 +50,7 @@ class LocalLor extends LorCharacter
   double _sinceSend = 0;
   final _lastSent = Vector2.zero();
   double _lastSentAim = 0;
+  int _lastSentFacing = 1;
 
   @override
   double get protectionLeft => _protectionLeft;
@@ -72,7 +74,7 @@ class LocalLor extends LorCharacter
       if (key == LogicalKeyboardKey.keyW ||
           key == LogicalKeyboardKey.arrowUp ||
           key == LogicalKeyboardKey.space) {
-        _jumpQueued = true;
+        _jumps.press();
       } else if (key == LogicalKeyboardKey.keyS ||
           key == LogicalKeyboardKey.arrowDown) {
         dropDown();
@@ -90,7 +92,7 @@ class LocalLor extends LorCharacter
   }
 
   void jump() {
-    _jumpQueued = true;
+    _jumps.press();
   }
 
   /// Falls through the ledge underfoot, if standing on one.
@@ -98,6 +100,7 @@ class LocalLor extends LorCharacter
     if (gameRef.arena.isOnLedge(position)) {
       _dropTime = 0.25;
       _onGround = false;
+      _jumps.cancel();
     }
   }
 
@@ -124,12 +127,16 @@ class LocalLor extends LorCharacter
     aim = atan2(target.y - from.y, target.x - from.x);
   }
 
+  /// Whether a swing would happen now: playing, standing and rested.
+  bool get canSwing =>
+      !knockedOut &&
+      !gameRef.roundBreak &&
+      gameRef.phase.value == GamePhase.playing &&
+      swingCooldownLeft <= 0;
+
   /// Swings the chub at whoever stands in front, up close.
   void swing() {
-    if (knockedOut ||
-        gameRef.roundBreak ||
-        gameRef.phase.value != GamePhase.playing ||
-        swingCooldownLeft > 0) {
+    if (!canSwing) {
       return;
     }
     swingLeft = Weapon.chubSwingSeconds;
@@ -221,18 +228,24 @@ class LocalLor extends LorCharacter
 
   void _move(double dt) {
     final direction = ((_right ? 1 : 0) - (_left ? 1 : 0) + _stick.direction)
-        .clamp(-1, 1);
+        .clamp(-1, 1)
+        .toInt();
+    facing = BodyGeometry.facingFor(
+      current: facing,
+      walking: direction,
+      attacking: charging || swingLeft > 0,
+      aim: aim,
+    );
     // Hurt players limp: slower after a hit, and a little slower the lower
     // their health.
     final limp = 0.8 + 0.2 * hp / GameConfig.maxHp;
     final slowed = _slowLeft > 0 ? _slowSpeed : 1.0;
     velocity.x = direction * GameConfig.moveSpeed * slowed * limp + _knock;
     _knock *= max(0, 1 - 7 * dt);
-    if ((_jumpQueued || _stick.jump) && _onGround) {
+    if (_jumps.update(dt, onGround: _onGround, held: _stick.jump)) {
       velocity.y = -GameConfig.jumpSpeed * (_slowLeft > 0 ? 0.8 : 1);
       _onGround = false;
     }
-    _jumpQueued = false;
     _dropTime = max(0, _dropTime - dt);
 
     final arena = gameRef.arena;
@@ -269,6 +282,7 @@ class LocalLor extends LorCharacter
   /// Back to full health at [spawn] for the next round.
   void resetForRound(Vector2 spawn) {
     position.setFrom(spawn);
+    facing = spawn.x < GameConfig.viewWidth / 2 ? 1 : -1;
     velocity.setZero();
     hp = GameConfig.maxHp;
     knockedOut = false;
@@ -277,6 +291,7 @@ class LocalLor extends LorCharacter
     _slowLeft = 0;
     _knock = 0;
     _onGround = true;
+    _jumps.cancel();
     _protectionLeft = GameConfig.spawnProtectionSeconds;
     gameRef.hpNotifier.value = hp;
   }
@@ -290,13 +305,15 @@ class LocalLor extends LorCharacter
     _sinceSync = 0;
     final changed =
         position.distanceTo(_lastSent) > 0.5 ||
-        (aim - _lastSentAim).abs() > 0.02;
+        (aim - _lastSentAim).abs() > 0.02 ||
+        facing != _lastSentFacing;
     if (!changed && _sinceSend < GameConfig.keepaliveInterval) {
       return;
     }
     _sinceSend = 0;
     _lastSent.setFrom(position);
     _lastSentAim = aim;
+    _lastSentFacing = facing;
     gameRef.net.send(
       NetEvent.state,
       PlayerStatePayload(
@@ -306,6 +323,7 @@ class LocalLor extends LorCharacter
         vx: velocity.x,
         vy: velocity.y,
         aim: aim,
+        facing: facing,
         hp: hp,
         knockedOut: knockedOut,
         charging: charging,

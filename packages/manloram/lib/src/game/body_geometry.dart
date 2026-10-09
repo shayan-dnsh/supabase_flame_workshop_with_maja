@@ -13,6 +13,26 @@ class BodyGeometry {
   static final shoulder = Vector2(0, -35);
   static const armLength = 16.0;
 
+  /// The side an [aim] points to: 1 right, -1 left.
+  static int sideOf(double aim) => cos(aim) >= 0 ? 1 : -1;
+
+  /// Which way a player faces next, 1 right or -1 left. They face the way
+  /// they walk ([walking] is -1, 0 or 1), keep their facing when standing
+  /// still so the body does not spin with the mouse, and turn to the [aim]
+  /// while [attacking] (winding up a throw or swinging the chub), so a throw
+  /// never leaves from behind their back.
+  static int facingFor({
+    required int current,
+    required int walking,
+    required bool attacking,
+    required double aim,
+  }) {
+    if (attacking) {
+      return sideOf(aim);
+    }
+    return walking != 0 ? walking : current;
+  }
+
   /// Where a throw at [aim] leaves the hand.
   static Vector2 handPosition(Vector2 feet, double aim) {
     return feet + shoulder + (Vector2(cos(aim), sin(aim))..scale(armLength));
@@ -43,6 +63,36 @@ class BodyGeometry {
       return BodyPart.head;
     }
     return hitsBody ? BodyPart.body : null;
+  }
+
+  /// The aim that lands a chub swing from [attackerFeet] on the nearest of
+  /// [targets], going for the head, or null when nobody is in reach. On a
+  /// phone the right thumb is busy with the aiming stick, so a tap on the
+  /// Chub button aims itself.
+  static double? swingAimAt(
+    Vector2 attackerFeet,
+    Iterable<Vector2> targets, {
+    double reach = 60,
+  }) {
+    double? best;
+    var bestDistance = double.infinity;
+    for (final feet in targets) {
+      // Up and towards the target: high enough to count as a head swing.
+      final aim = feet.x >= attackerFeet.x ? -pi / 4 : -3 * pi / 4;
+      final distance = attackerFeet.distanceTo(feet);
+      if (distance < bestDistance &&
+          swingHit(
+                attackerFeet: attackerFeet,
+                aim: aim,
+                victimFeet: feet,
+                reach: reach,
+              ) !=
+              null) {
+        best = aim;
+        bestDistance = distance;
+      }
+    }
+    return best;
   }
 
   /// The part a projectile of [radius] hits while moving from [from] to [to],

@@ -147,7 +147,11 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   /// The aim set by the stick on a phone. It sticks after the thumb lifts,
   /// until the mouse moves, so the arm does not swing back to an old spot.
   double? _stickAim;
-  bool _stickHeld = false;
+
+  /// The throw is held, by the aiming stick or the mouse button. Held
+  /// through a cooldown, the countdown or a round break, it starts charging
+  /// the moment a throw is allowed, so an early press is never lost.
+  bool _throwHeld = false;
   int _projectileCounter = 0;
   bool _starting = false;
   bool _startCalled = false;
@@ -515,25 +519,32 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     for (var i = 0; i < next.participants.length; i++) {
       final id = next.participants[i];
       final spawn = next.arena.spawnFor(i);
-      final facingAim = spawn.x < GameConfig.viewWidth / 2 ? 0.0 : pi;
+      final side = spawn.x < GameConfig.viewWidth / 2 ? 1 : -1;
+      final facingAim = side > 0 ? 0.0 : pi;
       if (id == myId) {
-        final local = LocalLor(
-          playerId: id,
-          playerName: _nameOf(id),
-          color: _colorOf(id),
-          outfit: _outfitOf(id),
-          position: spawn,
-        )..aim = facingAim;
+        final local =
+            LocalLor(
+                playerId: id,
+                playerName: _nameOf(id),
+                color: _colorOf(id),
+                outfit: _outfitOf(id),
+                position: spawn,
+              )
+              ..aim = facingAim
+              ..facing = side;
         me = local;
         world.add(local);
       } else {
-        final remote = RemoteLor(
-          playerId: id,
-          playerName: _nameOf(id),
-          color: _colorOf(id),
-          outfit: _outfitOf(id),
-          position: spawn,
-        )..aim = facingAim;
+        final remote =
+            RemoteLor(
+                playerId: id,
+                playerName: _nameOf(id),
+                color: _colorOf(id),
+                outfit: _outfitOf(id),
+                position: spawn,
+              )
+              ..aim = facingAim
+              ..facing = side;
         remotes[id] = remote;
         world.add(remote);
       }
@@ -651,8 +662,7 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
       } else {
         me?.aim = stickAim;
       }
-      // Pushed during a cooldown or a round break: charge as soon as allowed.
-      if (_stickHeld) {
+      if (_throwHeld) {
         me?.beginCharge();
       }
       if (now >= current.endsAt) {
@@ -779,7 +789,7 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   void stickAimed(double angle) {
     _stickAim = angle;
     me?.aim = angle;
-    _stickHeld = true;
+    _throwHeld = true;
     if (phase.value == GamePhase.playing) {
       me?.beginCharge();
     }
@@ -788,7 +798,7 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   /// The aiming stick is let go: throw, or with [cancel] (slid back to the
   /// centre, or the touch was interrupted) lower the arm instead.
   void stickReleased({bool cancel = false}) {
-    _stickHeld = false;
+    _throwHeld = false;
     if (cancel) {
       me?.cancelCharge();
     } else {
@@ -797,13 +807,36 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   }
 
   void pointerDown() {
+    _throwHeld = true;
     if (phase.value == GamePhase.playing) {
       me?.beginCharge();
     }
   }
 
   void pointerUp() {
+    _throwHeld = false;
     me?.release();
+  }
+
+  /// The Chub button on a phone. The right thumb is busy with the aiming
+  /// stick, so the swing aims itself at the head of the nearest player in
+  /// reach; with nobody in reach it goes the way the player last aimed.
+  void touchSwing() {
+    final lor = me;
+    if (lor == null || !lor.canSwing) {
+      return;
+    }
+    final scarecrow = _scarecrow;
+    final aim = BodyGeometry.swingAimAt(lor.position, [
+      for (final remote in remotes.values)
+        if (!remote.knockedOut) remote.position,
+      if (scarecrow != null) scarecrow.position,
+    ], reach: Weapon.chubReach);
+    if (aim != null) {
+      _stickAim = aim;
+      lor.aim = aim;
+    }
+    lor.swing();
   }
 
   void throwProjectile({

@@ -4,6 +4,7 @@ import 'package:flame/extensions.dart';
 
 import '../../game_config.dart';
 import '../../net/payloads/player_state_payload.dart';
+import '../body_geometry.dart';
 import 'lor_character.dart';
 
 class RemoteLor extends LorCharacter {
@@ -22,6 +23,7 @@ class RemoteLor extends LorCharacter {
     _target.setValues(state.x, state.y);
     velocity.setValues(state.vx, state.vy);
     aim = state.aim;
+    facing = state.facing ?? BodyGeometry.sideOf(state.aim);
     hp = state.hp;
     knockedOut = state.knockedOut;
     charging = state.charging;

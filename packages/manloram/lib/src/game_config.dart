@@ -8,6 +8,12 @@ class GameConfig {
   static const moveSpeed = 230.0;
   static const jumpSpeed = 640.0;
 
+  /// A jump pressed this long before landing still happens on landing, and
+  /// one pressed this long after walking off a ledge still leaves the ground,
+  /// so a dodge is never lost to a few frames.
+  static const jumpBufferSeconds = 0.12;
+  static const coyoteSeconds = 0.1;
+
   static const maxHp = 100.0;
   static const headDamageMultiplier = 2.0;
   static const respawnSeconds = 3.0;

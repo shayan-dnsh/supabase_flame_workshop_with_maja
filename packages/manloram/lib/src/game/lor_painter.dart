@@ -26,6 +26,7 @@ class LorPainter {
     required Outfit outfit,
     required Color color,
     double aim = 0,
+    double? facing,
     bool charging = false,
     String weaponId = Weapon.stoneId,
     double walkPhase = 0,
@@ -33,7 +34,8 @@ class LorPainter {
     double alpha = 1,
     double? swing,
   }) {
-    final facing = cos(aim) >= 0 ? 1.0 : -1.0;
+    // Players pass the way they face; the crowd and previews face the aim.
+    final side = facing ?? (cos(aim) >= 0 ? 1.0 : -1.0);
     final paint = _Brush(alpha: alpha, flashing: flashing);
     final stride = sin(walkPhase) * 5;
 
@@ -44,7 +46,7 @@ class LorPainter {
       _trousers(canvas, paint, stride);
     }
     if (swing == null) {
-      _stickArm(canvas, paint, facing, _sleeve(outfit, color), null);
+      _stickArm(canvas, paint, side, _sleeve(outfit, color), null);
     }
     switch (outfit) {
       case Outfit.kolah:
@@ -56,23 +58,23 @@ class LorPainter {
       case Outfit.kapenak:
         _kapenak(canvas, paint, color);
     }
-    _head(canvas, paint, facing, moustache: outfit != Outfit.golvani);
+    _head(canvas, paint, side, moustache: outfit != Outfit.golvani);
     switch (outfit) {
       case Outfit.kolah || Outfit.kapenak:
         _roundFeltHat(canvas, paint);
       case Outfit.chogha:
         _bakhtiariHat(canvas, paint);
       case Outfit.golvani:
-        _golvaniScarf(canvas, paint, color, facing);
+        _golvaniScarf(canvas, paint, color, side);
     }
     if (swing != null) {
-      _stickArm(canvas, paint, facing, _sleeve(outfit, color), swing);
+      _stickArm(canvas, paint, side, _sleeve(outfit, color), swing);
     }
     _throwingArm(
       canvas,
       paint,
       aim: aim,
-      facing: facing,
+      facing: side,
       charging: charging,
       weaponId: weaponId,
       sleeve: _sleeve(outfit, color),
