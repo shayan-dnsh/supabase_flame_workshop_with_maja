@@ -47,6 +47,9 @@ class _ManLoramAppState extends State<ManLoramApp> {
   /// player left fullscreen in between.
   bool _fullscreenAsked = false;
 
+  /// The screen size before a dialog or the keyboard came up.
+  Size? _steadySize;
+
   @override
   void initState() {
     super.initState();
@@ -191,30 +194,64 @@ class _ManLoramAppState extends State<ManLoramApp> {
           // would shrink to a sliver. Text is typed in dialogs instead.
           resizeToAvoidBottomInset: false,
           body: LayoutBuilder(
-            builder: (context, constraints) => Stack(
-              children: [
-                Center(child: _arena()),
-                // Over the whole screen, not just the arena, so the sticks
-                // keep their size and can use the bars beside the arena.
-                ListenableBuilder(
-                  listenable: Listenable.merge([_touchMode, game.removedBy]),
-                  builder: (context, _) =>
-                      _touchMode.value && game.removedBy.value == null
-                      ? TouchControls(key: ObjectKey(game), game: game)
-                      : const SizedBox.shrink(),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: _touchMode,
-                  builder: (context, touch, _) =>
-                      touch && constraints.maxHeight > constraints.maxWidth
-                      ? const _TurnSideways()
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
+            builder: (context, constraints) {
+              final size = _steadySizeFor(context, constraints.biggest);
+              return OverflowBox(
+                alignment: Alignment.topCenter,
+                minWidth: size.width,
+                maxWidth: size.width,
+                minHeight: size.height,
+                maxHeight: size.height,
+                child: _screen(size),
+              );
+            },
           ),
         ),
       ),
+    );
+  }
+
+  /// Some phone browsers shrink the whole page while the keyboard is up,
+  /// and the scaled arena and lobby would shrink with it until they are
+  /// tiny. Text is only typed in dialogs, so while one is open, or the
+  /// keyboard is still up, the page keeps the size it had before. Turning
+  /// the phone changes the width and lets the new size through.
+  Size _steadySizeFor(BuildContext context, Size size) {
+    final steady = _steadySize;
+    final typing =
+        !(ModalRoute.of(context)?.isCurrent ?? true) ||
+        MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (_isPhone &&
+        typing &&
+        steady != null &&
+        steady.width == size.width &&
+        steady.height > size.height) {
+      return steady;
+    }
+    _steadySize = size;
+    return size;
+  }
+
+  Widget _screen(Size size) {
+    return Stack(
+      children: [
+        Center(child: _arena()),
+        // Over the whole screen, not just the arena, so the sticks
+        // keep their size and can use the bars beside the arena.
+        ListenableBuilder(
+          listenable: Listenable.merge([_touchMode, game.removedBy]),
+          builder: (context, _) =>
+              _touchMode.value && game.removedBy.value == null
+              ? TouchControls(key: ObjectKey(game), game: game)
+              : const SizedBox.shrink(),
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: _touchMode,
+          builder: (context, touch, _) => touch && size.height > size.width
+              ? const _TurnSideways()
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 
