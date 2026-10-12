@@ -7,7 +7,7 @@ import 'package:manloram/src/db/profile_service.dart';
 import 'package:manloram/src/db/supabase_schema.g.dart';
 import 'package:manloram/src/game/arena_map.dart';
 import 'package:manloram/src/game/body_geometry.dart';
-import 'package:manloram/src/game/crowd_difficulty.dart';
+import 'package:manloram/src/game/difficulty.dart';
 import 'package:manloram/src/game/jump_window.dart';
 import 'package:manloram/src/game/wind_gusts.dart';
 import 'package:manloram/src/game/outfit.dart';
@@ -173,6 +173,7 @@ void main() {
           ledge.top - 4,
           Vector2(ledge.center.dx, ledge.top + 3),
           ignoreLedges: false,
+          atMs: 0,
         ),
         ledge.top,
       );
@@ -184,6 +185,7 @@ void main() {
           ledge.top + 10,
           Vector2(ledge.center.dx, ledge.top + 3),
           ignoreLedges: false,
+          atMs: 0,
         ),
         isNull,
       );
@@ -195,6 +197,7 @@ void main() {
           ledge.top - 4,
           Vector2(ledge.center.dx, ledge.top + 3),
           ignoreLedges: true,
+          atMs: 0,
         ),
         isNull,
       );
@@ -203,6 +206,7 @@ void main() {
           ArenaMap.groundTop - 5,
           Vector2(10, ArenaMap.groundTop + 2),
           ignoreLedges: true,
+          atMs: 0,
         ),
         ArenaMap.groundTop,
       );
@@ -211,15 +215,47 @@ void main() {
     test('every spawn on every map stands on something', () {
       for (final map in ArenaMap.all) {
         for (var i = 0; i < map.spawns.length; i++) {
-          final spawn = map.spawnFor(i);
-          expect(map.isStanding(spawn), isTrue, reason: '${map.id} $spawn');
-          expect(
-            map.isSolid(spawn - Vector2(0, 30)),
-            isFalse,
-            reason: '${map.id} $spawn is inside a wall',
-          );
+          for (final atMs in [0, 1250, 3750]) {
+            final spawn = map.spawnFor(i, atMs: atMs);
+            expect(
+              map.isStanding(spawn, atMs: atMs),
+              isTrue,
+              reason: '${map.id} $spawn',
+            );
+            expect(
+              map.isSolid(spawn - Vector2(0, 30), atMs: atMs),
+              isFalse,
+              reason: '${map.id} $spawn is inside a wall',
+            );
+          }
         }
       }
+    });
+
+    test('ledges slide back and forth, neighbours the opposite way', () {
+      const quarter = GameConfig.ledgeSwaySeconds * 250;
+      expect(arena.ledgeAt(0, 0), arena.ledges[0]);
+      expect(
+        arena.ledgeAt(0, quarter).left,
+        arena.ledges[0].left + GameConfig.ledgeSwayPx,
+      );
+      expect(
+        arena.ledgeAt(1, quarter).left,
+        arena.ledges[1].left - GameConfig.ledgeSwayPx,
+      );
+      expect(arena.ledgeAt(0, quarter * 4), arena.ledges[0]);
+    });
+
+    test('a player on a sliding ledge rides along with it', () {
+      final feet = Vector2(ledge.center.dx, ledge.top);
+      expect(
+        arena.carry(feet, fromMs: 0, toMs: 100),
+        closeTo(ArenaMap.ledgeShift(0, 100), 1e-9),
+      );
+      expect(
+        arena.carry(Vector2(10, ArenaMap.groundTop), fromMs: 0, toMs: 100),
+        0,
+      );
     });
 
     test('the bazaar tower blocks walking and holds players on top', () {
@@ -233,17 +269,15 @@ void main() {
           tower.top - 3,
           Vector2(tower.center.dx, tower.top + 4),
           ignoreLedges: true,
+          atMs: 0,
         ),
         tower.top,
         reason: 'dropping does not fall through a tower',
       );
-      expect(bazaar.isSolid(Vector2(tower.center.dx, tower.top + 20)), isTrue);
-    });
-
-    test('the crowd stands on the Bisheh cliffs', () {
-      const bisheh = ArenaMap.bishehWaterfall;
-      expect(bisheh.surfaceAt(24), bisheh.blocks.first.top);
-      expect(bisheh.surfaceAt(480), ArenaMap.groundTop);
+      expect(
+        bazaar.isSolid(Vector2(tower.center.dx, tower.top + 20), atMs: 0),
+        isTrue,
+      );
     });
 
     test('wind blows only at Gahar Lake, the same for the same seed', () {
@@ -255,50 +289,12 @@ void main() {
     });
   });
 
-  group('CrowdDifficulty', () {
-    test('every round makes the crowd throw faster, heavier and truer', () {
-      for (var level = 1; level < CrowdDifficulty.maxLevel; level++) {
-        expect(
-          CrowdDifficulty.intervalSeconds(level + 1),
-          lessThanOrEqualTo(CrowdDifficulty.intervalSeconds(level)),
-        );
-        expect(
-          CrowdDifficulty.ajorChance(level + 1),
-          greaterThanOrEqualTo(CrowdDifficulty.ajorChance(level)),
-        );
-        expect(
-          CrowdDifficulty.aimError(level + 1),
-          lessThanOrEqualTo(CrowdDifficulty.aimError(level)),
-        );
-      }
-      expect(CrowdDifficulty.level(round: 1, elapsedMs: 0), 1);
-      expect(CrowdDifficulty.level(round: 3, elapsedMs: 0), 3);
-      expect(CrowdDifficulty.level(round: 1, elapsedMs: 65000), 3);
-      expect(
-        CrowdDifficulty.level(round: 20, elapsedMs: 0),
-        CrowdDifficulty.maxLevel,
-      );
-    });
-
-    test('a crowd throw lands where it was aimed, wind included', () {
-      final from = Vector2(24, 430);
-      final to = Vector2(600, 440);
-      const seconds = 0.9;
-      const wind = -200.0;
-      final velocity = CrowdDifficulty.launchToHit(
-        from,
-        to,
-        seconds,
-        wind: wind,
-      );
-      final landed = ThrowPhysics.positionAt(
-        from,
-        velocity,
-        seconds,
-        wind: wind,
-      );
-      expect(landed.x, closeTo(to.x, 1e-3));
-      expect(landed.y, closeTo(to.y, 1e-3));
+  group('Difficulty', () {
+    test('rounds and time without a knockout raise the level', () {
+      expect(Difficulty.level(round: 1, elapsedMs: 0), 1);
+      expect(Difficulty.level(round: 2, elapsedMs: 0), 2);
+      expect(Difficulty.level(round: 1, elapsedMs: 35000), 2);
+      expect(Difficulty.level(round: 20, elapsedMs: 0), Difficulty.maxLevel);
     });
   });
 
@@ -487,24 +483,19 @@ void main() {
   });
 
   group('step-by-step difficulty', () {
-    test('the crowd joins side by side, Ajor only once both sides throw', () {
-      expect(CrowdDifficulty.sides(1), isEmpty);
-      expect(CrowdDifficulty.sides(2), {CrowdSide.left});
-      expect(CrowdDifficulty.sides(3), {CrowdSide.left, CrowdSide.right});
-      expect(CrowdDifficulty.ajorChance(2), 0);
-      expect(CrowdDifficulty.ajorChance(3), greaterThan(0));
-      expect(CrowdDifficulty.announce(4), contains('wind'));
-      expect(CrowdDifficulty.announce(5), contains('back'));
+    test('each level announces what it brings', () {
+      expect(Difficulty.announce(2), contains('wind'));
+      expect(Difficulty.announce(3), contains('back'));
     });
 
-    test('gusts blow only from level 4, the same for the same seed', () {
+    test('gusts blow only from level 2, the same for the same seed', () {
       final a = WindGusts(99);
       final b = WindGusts(99);
       var blew = false;
       for (var ms = 0; ms < 120000; ms += 250) {
-        expect(a.at(elapsedMs: ms, level: 3), 0);
-        final push = a.at(elapsedMs: ms, level: 6);
-        expect(push, b.at(elapsedMs: ms, level: 6));
+        expect(a.at(elapsedMs: ms, level: 1), 0);
+        final push = a.at(elapsedMs: ms, level: 3);
+        expect(push, b.at(elapsedMs: ms, level: 3));
         blew = blew || push != 0;
       }
       expect(blew, isTrue);
@@ -514,14 +505,14 @@ void main() {
       final gusts = WindGusts(7);
       var strongest = 0.0;
       for (var ms = 0; ms < 120000; ms += 100) {
-        final push = gusts.at(elapsedMs: ms, level: 5).abs();
+        final push = gusts.at(elapsedMs: ms, level: 3).abs();
         if (push > strongest) {
           strongest = push;
         }
         expect(
-          gusts.at(elapsedMs: ms, level: 4).abs(),
+          gusts.at(elapsedMs: ms, level: 2).abs(),
           lessThanOrEqualTo(600),
-          reason: 'storms are tamed before level 5',
+          reason: 'storms are tamed before level 3',
         );
       }
       expect(strongest, greaterThan(1000));

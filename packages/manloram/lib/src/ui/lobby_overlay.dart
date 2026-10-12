@@ -789,8 +789,7 @@ class _Controls extends StatefulWidget {
 class _ControlsState extends State<_Controls> {
   late bool _phone = widget.phoneFirst;
 
-  static const _crowd =
-      'Each level adds more: villagers left, then right, then wind and storms.';
+  static const _levels = 'Each level adds more: first wind gusts, then storms.';
 
   static const _laptop = [
     'Move with A and D, jump with W or Space, drop off a ledge with S.',
@@ -842,7 +841,7 @@ class _ControlsState extends State<_Controls> {
           ),
           for (final line in _phone ? _mobile : _laptop)
             Text(line, style: style),
-          const Text(_crowd, style: style),
+          const Text(_levels, style: style),
         ],
       ),
     );

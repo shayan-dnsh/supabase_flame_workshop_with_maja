@@ -25,8 +25,9 @@ Acceptance criteria:
   worth the most.
 - A knockout ends the round: everyone is back to full health at their
   spawn after a short break, and points keep adding up for the whole match.
-- Villagers at the sides throw stones and Ajor at everyone, harder every
-  round, so I have to keep moving.
+- Wind gusts, and later storms, join as the match goes on and bend every
+  throw.
+- The ledges slide back and forth; standing on one carries me along.
 - I pick the map, or leave it on Random.
 - As the room host (whoever has been in the room longest), I can remove a
   player who spoils the game.
@@ -43,7 +44,7 @@ Acceptance criteria:
 | Outfits | Kolah namadi (felt hat and sash), Chogha (striped Bakhtiari cloak), Golvani (flowered headscarf and coin vest), Kapenak (shepherd's felt cloak); cosmetic only |
 | Maps | Falak-ol-Aflak Castle (classic ledges), Khorramabad Bazaar (a tower to lob over), Bisheh Waterfall (cliffs; water slows throws), Gahar Lake (wind bends throws) |
 | Rounds | A knockout ends the round; everyone returns to full health at their spawn after 2.5 s |
-| Levels | The level rises with every round and every 30 s (`--dart-define=LEVEL_SECONDS=8` to test faster), up to 6. Level 1 is calm; 2: villagers on the left throw stones; 3: the right side joins, with Ajor; 4: wind gusts bend every throw; 5: storm gusts can blow a throw back; then the crowd speeds up. Crowd hits only hurt: no points |
+| Levels | The level rises with every round and every 30 s (`--dart-define=LEVEL_SECONDS=8` to test faster), up to 3. Level 1 is calm; 2: wind gusts bend every throw; 3: storm gusts can blow a throw back |
 | Move | `A` `D` or arrow keys, jump with `W`, `Space` or arrow up, drop off a ledge with `S` or arrow down. A jump pressed just before landing, or just after walking off a ledge, still counts |
 | Aim | Mouse; a short dotted arc shows the start of the throw |
 | Throw | Hold the left mouse button to charge, release to throw. A ring at the hand fills with the charge and pulses when full. Held during a cooldown, the throw starts charging as soon as it can |

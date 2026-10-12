@@ -27,10 +27,9 @@ import '../net/payloads/swing_payload.dart';
 import 'arena_map.dart';
 import 'body_geometry.dart';
 import 'components/wind_streaks.dart';
-import 'crowd_difficulty.dart';
+import 'difficulty.dart';
 import 'components/aim_guide.dart';
 import 'components/arena_background.dart';
-import 'components/crowd.dart';
 import 'components/effects.dart';
 import 'components/local_lor.dart';
 import 'components/projectile.dart';
@@ -97,14 +96,14 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   /// Sideways push on throws in this match, from the map and the seed.
   double get wind => (match?.wind ?? 0) + gust;
 
-  /// The gust blowing now: from level 4, shared by every device.
+  /// The gust blowing now: from level 2, shared by every device.
   double get gust {
     final current = match;
     final gusts = _gusts;
     if (current == null || gusts == null || roundBreak) {
       return 0;
     }
-    return gusts.at(elapsedMs: _now - current.startedAt, level: crowdLevel);
+    return gusts.at(elapsedMs: _now - current.startedAt, level: level);
   }
 
   WindGusts? _gusts;
@@ -125,18 +124,12 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   bool get roundBreak => _roundResumesAt != null;
   static const _roundBreakMs = 2500;
 
-  Crowd crowd = Crowd();
-  int _nextCrowdThrowAt = 0;
-
-  int get crowdLevel {
+  int get level {
     final current = match;
     if (current == null) {
       return 1;
     }
-    return CrowdDifficulty.level(
-      round: round,
-      elapsedMs: _now - current.startedAt,
-    );
+    return Difficulty.level(round: round, elapsedMs: _now - current.startedAt);
   }
 
   ArenaBackground? _background;
@@ -157,6 +150,9 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   bool _startCalled = false;
 
   int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  /// The wall clock, which also slides the ledges back and forth.
+  int get nowMs => _now;
 
   @override
   Future<void> onLoad() async {
@@ -518,7 +514,7 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
 
     for (var i = 0; i < next.participants.length; i++) {
       final id = next.participants[i];
-      final spawn = next.arena.spawnFor(i);
+      final spawn = next.arena.spawnFor(i, atMs: _now);
       final side = spawn.x < GameConfig.viewWidth / 2 ? 1 : -1;
       final facingAim = side > 0 ? 0.0 : pi;
       if (id == myId) {
@@ -588,11 +584,8 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     this.round = round;
     _roundResumesAt = null;
     roundBanner.value = null;
-    _nextCrowdThrowAt = next.startedAt + 2500;
-    crowd = Crowd();
-    world.add(crowd);
     _gusts = WindGusts(next.seed);
-    _shownLevel = CrowdDifficulty.level(
+    _shownLevel = Difficulty.level(
       round: round,
       elapsedMs: _now - next.startedAt,
     );
@@ -606,10 +599,10 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
   WindStreaks? _streaks;
 
   void _announceLevel(int now) {
-    final level = crowdLevel;
+    final level = this.level;
     if (level > _shownLevel) {
       _shownLevel = level;
-      levelBanner.value = CrowdDifficulty.announce(level);
+      levelBanner.value = Difficulty.announce(level);
       _levelBannerUntil = now + 3500;
     } else if (levelBanner.value != null && now >= _levelBannerUntil) {
       levelBanner.value = null;
@@ -674,7 +667,6 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
         _startNextRound(current);
       }
       _announceLevel(now);
-      _runCrowd(current, now);
     }
   }
 
@@ -696,85 +688,13 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     _roundResumesAt = null;
     roundBanner.value = null;
     me?.resetForRound(
-      current.arena.spawnFor(current.participants.indexOf(myId)),
+      current.arena.spawnFor(current.participants.indexOf(myId), atMs: _now),
     );
     for (final remote in remotes.values) {
       remote
         ..hp = GameConfig.maxHp
         ..knockedOut = false;
     }
-    _nextCrowdThrowAt = _now + 1500;
-  }
-
-  /// One player's game throws for the crowd, so its throws are the same on
-  /// every device: the host, or whoever answers join requests if not.
-  void _runCrowd(MatchState current, int now) {
-    if (roundBreak ||
-        now < _nextCrowdThrowAt ||
-        _snapshotResponder(current) != myId) {
-      return;
-    }
-    final level = crowdLevel;
-    final throwers = Crowd.idsFor(CrowdDifficulty.sides(level));
-    if (throwers.isEmpty) {
-      _nextCrowdThrowAt = now + 1000;
-      return;
-    }
-    final interval =
-        CrowdDifficulty.intervalSeconds(level) *
-        (0.75 + _random.nextDouble() / 2);
-    _nextCrowdThrowAt = now + (interval * 1000).round();
-
-    final targets = [
-      if (me case final local? when !local.knockedOut) local.position,
-      for (final remote in remotes.values)
-        if (!remote.knockedOut) remote.position,
-    ];
-    if (targets.isEmpty) {
-      return;
-    }
-    final target = targets[_random.nextInt(targets.length)];
-    final thrower = throwers[_random.nextInt(throwers.length)];
-    final weapon = _random.nextDouble() < CrowdDifficulty.ajorChance(level)
-        ? weapons.ajor
-        : weapons.stone;
-    final error = CrowdDifficulty.aimError(level);
-    final aimPoint =
-        target +
-        Vector2(0, -32) +
-        Vector2(
-          (_random.nextDouble() * 2 - 1) * error,
-          (_random.nextDouble() * 2 - 1) * error,
-        );
-    final origin = crowd.throwOrigin(thrower);
-    final flightSeconds = 0.7 + _random.nextDouble() * 0.5;
-    final velocity = CrowdDifficulty.launchToHit(
-      origin,
-      aimPoint,
-      flightSeconds,
-      wind: wind,
-    );
-    final projectileId = '$thrower-$myId-${_projectileCounter++}';
-    crowd.animateThrow(thrower, weapon.id);
-    _spawnProjectile(
-      projectileId: projectileId,
-      ownerId: thrower,
-      weapon: weapon,
-      origin: origin,
-      velocity: velocity,
-    );
-    net.send(
-      NetEvent.launch,
-      LaunchPayload(
-        id: thrower,
-        projectileId: projectileId,
-        weaponId: weapon.id,
-        x: origin.x,
-        y: origin.y,
-        vx: velocity.x,
-        vy: velocity.y,
-      ).toJson(),
-    );
   }
 
   void pointerMoved(Offset canvasPosition) {
@@ -871,14 +791,10 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
       return;
     }
     final current = match;
-    final fromCrowd = Crowd.isCrowd(payload.id);
     if (current == null ||
         roundBreak ||
-        !(fromCrowd || current.participants.contains(payload.id))) {
+        !current.participants.contains(payload.id)) {
       return;
-    }
-    if (fromCrowd) {
-      crowd.animateThrow(payload.id, payload.weaponId);
     }
     _spawnProjectile(
       projectileId: payload.projectileId,
@@ -957,8 +873,7 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     required String hitId,
     required double distance,
   }) {
-    final fromCrowd = Crowd.isCrowd(attackerId);
-    final points = fromCrowd ? 0 : weapon.pointsFor(part);
+    final points = weapon.pointsFor(part);
     lor.takeHit(weapon, part);
     final knockout = lor.knockedOut;
     net.send(
@@ -988,10 +903,7 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     }
     final current = match;
     final matchId = current?.matchId;
-    if (!fromCrowd &&
-        current != null &&
-        current.isRecorded &&
-        matchId != null) {
+    if (current != null && current.isRecorded && matchId != null) {
       unawaited(
         backend!.matches
             .recordHit(
@@ -1158,10 +1070,6 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     if (victimId != _scarecrowId) {
       _splashBlood(at, head: head, heavy: weapon.isAjor);
     }
-    if (Crowd.isCrowd(attackerId)) {
-      _applyCrowdHit(victimId, weapon, head: head, knockout: knockout, at: at);
-      return;
-    }
     scoreboard.recordHit(
       attackerId: attackerId,
       victimId: victimId,
@@ -1213,39 +1121,13 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
       ..add(BloodStain(position: feet.clone(), heavy: heavy));
   }
 
-  /// The crowd scores no points and is not saved: a crowd hit only hurts.
-  void _applyCrowdHit(
-    String victimId,
-    Weapon weapon, {
-    required bool head,
-    required bool knockout,
-    required Vector2 at,
-  }) {
-    final damage = weapon.damageFor(head ? BodyPart.head : BodyPart.body);
-    world.add(
-      FloatingText(
-        text: '-${damage.round()}${knockout ? '  KO!' : ''}',
-        color: const Color(0xFFE5533D),
-        fontSize: victimId == myId ? 17 : 13,
-        position: at + BodyGeometry.headCenter + Vector2(0, -40),
-      ),
-    );
-    final how = head ? '${weapon.name} to the head' : weapon.name;
-    final entry = FeedEntry(
-      text:
-          'The crowd hit ${_nameOf(victimId)}: $how'
-          '${knockout ? ', knocked out' : ''}',
-      mine: victimId == myId,
-    );
-    feed.value = [entry, ...feed.value].take(_feedLength).toList();
-  }
-
   /// A spawn point far from the other players, so nobody respawns into a
   /// waiting Ajor.
   Vector2 pickRespawnPoint() {
     final others = [for (final remote in remotes.values) remote.position];
     final candidates = [
-      for (var i = 0; i < arena.spawns.length; i++) arena.spawnFor(i),
+      for (var i = 0; i < arena.spawns.length; i++)
+        arena.spawnFor(i, atMs: _now),
     ]..shuffle(_random);
     if (others.isEmpty) {
       return candidates.first.clone();
@@ -1452,9 +1334,6 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     if (id == _scarecrowId) {
       return 'the scarecrow';
     }
-    if (Crowd.isCrowd(id)) {
-      return 'The crowd';
-    }
     return _rosterMember(id)?.name ?? scoreboard[id]?.name ?? 'Lor';
   }
 
@@ -1482,7 +1361,6 @@ class ManLoramGame extends FlameGame with HasKeyboardHandlerComponents {
     projectiles.clear();
     _scarecrow?.removeFromParent();
     _scarecrow = null;
-    crowd.removeFromParent();
     _streaks?.removeFromParent();
     _streaks = null;
     _gusts = null;

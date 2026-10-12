@@ -97,7 +97,7 @@ class LocalLor extends LorCharacter
 
   /// Falls through the ledge underfoot, if standing on one.
   void dropDown() {
-    if (gameRef.arena.isOnLedge(position)) {
+    if (gameRef.arena.isOnLedge(position, atMs: gameRef.nowMs)) {
       _dropTime = 0.25;
       _onGround = false;
       _jumps.cancel();
@@ -202,6 +202,7 @@ class LocalLor extends LorCharacter
   @override
   void update(double dt) {
     super.update(dt);
+    _rideLedge(dt);
     if (gameRef.phase.value != GamePhase.playing) {
       velocity.setZero();
       _broadcastState(dt);
@@ -224,6 +225,20 @@ class LocalLor extends LorCharacter
     _move(dt);
     gameRef.checkIncomingHits(this);
     _broadcastState(dt);
+  }
+
+  /// Standing on a sliding ledge carries the player along, also during the
+  /// countdown and round breaks.
+  void _rideLedge(double dt) {
+    if (!_onGround || position.y >= ArenaMap.groundTop) {
+      return;
+    }
+    final now = gameRef.nowMs;
+    position.x += gameRef.arena.carry(
+      position,
+      fromMs: now - (dt * 1000).round(),
+      toMs: now,
+    );
   }
 
   void _move(double dt) {
@@ -264,6 +279,7 @@ class LocalLor extends LorCharacter
         previousY,
         position,
         ignoreLedges: _dropTime > 0,
+        atMs: gameRef.nowMs,
       );
       if (landing != null) {
         position.y = landing;
@@ -277,7 +293,7 @@ class LocalLor extends LorCharacter
     }
   }
 
-  bool _standing() => gameRef.arena.isStanding(position);
+  bool _standing() => gameRef.arena.isStanding(position, atMs: gameRef.nowMs);
 
   /// Back to full health at [spawn] for the next round.
   void resetForRound(Vector2 spawn) {

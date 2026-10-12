@@ -193,8 +193,7 @@ class _HudOverlayState extends State<HudOverlay> {
                             ),
                           ),
                           Text(
-                            '$banner: everyone back to full health. '
-                            'The crowd gets meaner.',
+                            '$banner: everyone back to full health.',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -230,7 +229,7 @@ class _HudOverlayState extends State<HudOverlay> {
     );
   }
 
-  /// Round, crowd level and, on a windy map, the wind.
+  /// Round, difficulty level and, on a windy map, the wind.
   String _roundLine() {
     final game = widget.game;
     final wind = game.wind;
@@ -244,7 +243,7 @@ class _HudOverlayState extends State<HudOverlay> {
                   ? 'strong'
                   : 'light'}';
     return '${game.match?.arena.name ?? ''}   Round ${game.round}   '
-        'Level ${game.crowdLevel}$windText';
+        'Level ${game.level}$windText';
   }
 
   double _swingCooldownRatio() {

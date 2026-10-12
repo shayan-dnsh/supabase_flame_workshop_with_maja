@@ -30,13 +30,13 @@ class Gust {
 }
 
 /// The gusts of one match, worked out from its seed so every device feels
-/// the same wind. Gusts blow from difficulty level 4; from level 5 some are
+/// the same wind. Gusts blow from difficulty level 2; from level 3 some are
 /// storms that can blow a throw back at whoever threw it.
 class WindGusts {
   WindGusts(int seed) : _gusts = _schedule(seed);
 
-  static const gustsFromLevel = 4;
-  static const stormsFromLevel = 5;
+  static const gustsFromLevel = 2;
+  static const stormsFromLevel = 3;
 
   final List<Gust> _gusts;
 
@@ -66,7 +66,7 @@ class WindGusts {
   }
 
   /// The gust blowing [elapsedMs] into the match at difficulty [level].
-  /// Below level 5 a storm blows as an ordinary strong gust.
+  /// Below level 3 a storm blows as an ordinary strong gust.
   double at({required int elapsedMs, required int level}) {
     if (level < gustsFromLevel) {
       return 0;

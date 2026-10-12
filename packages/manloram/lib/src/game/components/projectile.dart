@@ -52,7 +52,7 @@ class Projectile extends PositionComponent with HasGameRef<ManLoramGame> {
       _throughWater = true;
       velocity.x *= 0.55;
     }
-    if (arena.isSolid(position)) {
+    if (arena.isSolid(position, atMs: gameRef.nowMs)) {
       parent?.add(Dust(position: position.clone(), heavy: weapon.isAjor));
       removeFromParent();
     } else if (arena.isOutOfBounds(position) ||

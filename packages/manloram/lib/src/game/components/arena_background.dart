@@ -5,9 +5,10 @@ import 'package:flame/components.dart';
 
 import '../../game_config.dart';
 import '../arena_map.dart';
+import '../manloram_game.dart';
 
 /// The scenery of one map, with its ground, ledges, walls and water.
-class ArenaBackground extends PositionComponent {
+class ArenaBackground extends PositionComponent with HasGameRef<ManLoramGame> {
   ArenaBackground(this.arena, {this.wind = 0}) : super(priority: -10);
 
   final ArenaMap arena;
@@ -50,7 +51,7 @@ class ArenaBackground extends PositionComponent {
     if (water != null) {
       _waterfall(canvas, water);
     }
-    for (final ledge in arena.ledges) {
+    for (final ledge in arena.ledgesAt(gameRef.nowMs)) {
       _ledge(canvas, ledge);
     }
     if (_isGahar) {

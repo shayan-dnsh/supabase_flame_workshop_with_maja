@@ -29,7 +29,8 @@ class ArenaMap {
   final String twist;
 
   /// Platforms players land on from above and drop through with the down
-  /// key; throws hit them from any side.
+  /// key; throws hit them from any side. These are their resting places:
+  /// they slide back and forth around them, see [ledgeAt].
   final List<Rect> ledges;
 
   /// Solid ground-standing walls, cliffs and towers: players cannot walk
@@ -172,28 +173,43 @@ class ArenaMap {
     return random.nextBool() ? strength : -strength;
   }
 
-  Vector2 spawnFor(int index) {
+  /// How far ledge [index] has slid sideways at [atMs], a wall-clock time,
+  /// so every device sees it in the same place without sending anything.
+  /// Neighbouring ledges swing opposite ways.
+  static double ledgeShift(int index, int atMs) {
+    const period = GameConfig.ledgeSwaySeconds * 1000;
+    final angle = 2 * pi * (atMs % period) / period;
+    return (index.isEven ? 1 : -1) * GameConfig.ledgeSwayPx * sin(angle);
+  }
+
+  /// Ledge [index] where it is at [atMs].
+  Rect ledgeAt(int index, int atMs) =>
+      ledges[index].translate(ledgeShift(index, atMs), 0);
+
+  List<Rect> ledgesAt(int atMs) => [
+    for (var i = 0; i < ledges.length; i++) ledgeAt(i, atMs),
+  ];
+
+  /// Spawn [index] at [atMs]: one on a ledge moves with the ledge.
+  Vector2 spawnFor(int index, {required int atMs}) {
     final spawn = spawns[index % spawns.length];
+    for (var i = 0; i < ledges.length; i++) {
+      final ledge = ledges[i];
+      if (spawn.dy == ledge.top &&
+          spawn.dx >= ledge.left &&
+          spawn.dx <= ledge.right) {
+        return Vector2(spawn.dx + ledgeShift(i, atMs), spawn.dy);
+      }
+    }
     return Vector2(spawn.dx, spawn.dy);
   }
 
-  /// The ground or block top at [x], where the crowd stands.
-  double surfaceAt(double x) {
-    var top = groundTop;
-    for (final block in blocks) {
-      if (x >= block.left && x <= block.right && block.top < top) {
-        top = block.top;
-      }
-    }
-    return top;
-  }
-
-  bool isSolid(Vector2 point) {
+  bool isSolid(Vector2 point, {required int atMs}) {
     if (point.y >= groundTop) {
       return true;
     }
     final offset = Offset(point.x, point.y);
-    return ledges.any((ledge) => ledge.contains(offset)) ||
+    return ledgesAt(atMs).any((ledge) => ledge.contains(offset)) ||
         blocks.any((block) => block.contains(offset));
   }
 
@@ -207,11 +223,12 @@ class ArenaMap {
     double previousY,
     Vector2 position, {
     required bool ignoreLedges,
+    required int atMs,
   }) {
     if (position.y >= groundTop) {
       return groundTop;
     }
-    for (final top in [...blocks, if (!ignoreLedges) ...ledges]) {
+    for (final top in [...blocks, if (!ignoreLedges) ...ledgesAt(atMs)]) {
       final crossedTop = previousY <= top.top && position.y >= top.top;
       final above = position.x >= top.left - 6 && position.x <= top.right + 6;
       if (crossedTop && above) {
@@ -222,11 +239,25 @@ class ArenaMap {
   }
 
   /// Standing on a ledge, which the down key can drop through.
-  bool isOnLedge(Vector2 feet) => _standsOn(ledges, feet);
+  bool isOnLedge(Vector2 feet, {required int atMs}) =>
+      _standsOn(ledgesAt(atMs), feet);
 
   /// Standing on anything, so walking off an edge starts a fall.
-  bool isStanding(Vector2 feet) =>
-      feet.y >= groundTop || _standsOn(ledges, feet) || _standsOn(blocks, feet);
+  bool isStanding(Vector2 feet, {required int atMs}) =>
+      feet.y >= groundTop ||
+      _standsOn(ledgesAt(atMs), feet) ||
+      _standsOn(blocks, feet);
+
+  /// How far the ledge under [feet] slid between [fromMs] and [toMs], so a
+  /// player standing on it rides along instead of sliding off.
+  double carry(Vector2 feet, {required int fromMs, required int toMs}) {
+    for (var i = 0; i < ledges.length; i++) {
+      if (_standsOn([ledgeAt(i, fromMs)], feet)) {
+        return ledgeShift(i, toMs) - ledgeShift(i, fromMs);
+      }
+    }
+    return 0;
+  }
 
   bool _standsOn(List<Rect> surfaces, Vector2 feet) => surfaces.any(
     (surface) =>

@@ -34,7 +34,7 @@ class LorPainter {
     double alpha = 1,
     double? swing,
   }) {
-    // Players pass the way they face; the crowd and previews face the aim.
+    // Players pass the way they face; previews face the aim.
     final side = facing ?? (cos(aim) >= 0 ? 1.0 : -1.0);
     final paint = _Brush(alpha: alpha, flashing: flashing);
     final stride = sin(walkPhase) * 5;

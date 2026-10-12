@@ -39,6 +39,11 @@ class GameConfig {
 
   static const countdownSeconds = 4;
 
+  /// Ledges slide this far either side of their place and back, once every
+  /// [ledgeSwaySeconds], so a ledge is never a safe place to stand still.
+  static const ledgeSwayPx = 40.0;
+  static const ledgeSwaySeconds = 5;
+
   /// Seconds without a knockout before the difficulty level rises anyway.
   static const levelEverySeconds = int.fromEnvironment(
     'LEVEL_SECONDS',
